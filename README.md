@@ -1,117 +1,142 @@
 # Pro-RAG: High-Performance Autonomous Portfolio Intelligence
 
-Pro-RAG is an end-to-end Retrieval-Augmented Generation (RAG) system that transforms professional portfolio data into an intelligent, low-latency AI assistant. The project was engineered from scratch with a strong focus on modular software architecture, maintainability, and performance optimization.
+Pro-RAG is an end-to-end Retrieval-Augmented Generation (RAG) system that transforms professional portfolio data into an intelligent, low-latency AI assistant. The system autonomously crawls portfolio sources, synthesizes structured documentation, generates embeddings, and serves context-aware responses through a persistent in-memory retrieval engine.
 
 ---
 
 ## 1. Project Directory Structure
 
-The project follows clean Separation of Concerns (SoC) principles:
-
 ```text
 RAG/
-├── runner.py              # Pipeline Controller (Entry Point)
-├── app.py                 # FastAPI Server (Persistent Model Serving)
-├── rag_engine.py          # Core Logic (Classes & Engineering Engines)
-├── .env                   # Secret Management (API Keys)
-├── requirements.txt       # Dependency Management
-├── chunks.json            # Semantic Document Chunks
-├── embedded_chunks.json   # Vector Embeddings (JSON Vector Store)
-└── Master_RAG.pdf         # AI Structured Master Document
+├── runner.py                  # Manual Pipeline Trigger
+├── app.py                     # FastAPI Persistent Inference Server
+├── rag_engine.py              # Core RAG Architecture / Engines
+├── .env                       # Environment Variables / API Keys
+├── requirements.txt           # Dependencies
+└── Asad_Ahmed_Master_RAG.pdf  # Generated Structured Portfolio Knowledge Base
 ```
 
 ---
 
 ## 2. Engineering Architecture (Class-Based Design)
 
-The system is divided into modular classes for maintainability and scalability:
+The platform follows a modular class-based architecture for maintainability and scalability:
 
-| Class | Engineering Responsibility |
-|--------|-----------------------------|
-| ContentCrawler | Targeted URL scraping with DOM-based noise removal |
-| AIEngine | LLM orchestration and raw-text-to-structured-Markdown synthesis via Gemini 3 Flash |
-| DocumentChunker | Header-aware recursive splitting for high-fidelity context preservation |
-| EmbedEngine | Local transformer-based embedding generation using `all-MiniLM-L6-v2` |
-| SearchEngine | High-speed retrieval engine using NumPy-based matrix normalization |
-| ChatEngine | Context-injected prompt engineering and deterministic response generation |
-
----
-
-## Future Roadmap: Conversational Memory & Context Preservation
-
-Planned enhancements for future iterations include persistent conversational memory and long-term context retention features:
-
-- Incremental Context Updates  
-- Previous Chat Referencing  
-- Context Compression  
-- Semantic Memory Retrieval  
-- Long-Term Context Maintenance  
+| Class | Responsibility |
+|--------|----------------|
+| ContentCrawler | Fetches and cleans portfolio website data via DOM parsing |
+| AIEngine | Converts raw crawled corpus into structured markdown documentation using Gemini |
+| PDFGenerator | Generates portable structured knowledge-base PDF from synthesized content |
+| PortfolioRetriever | Orchestrates crawling → synthesis → PDF generation pipeline |
+| DocumentChunker | Parses PDF and creates semantic chunks using markdown-aware splitting |
+| EmbedEngine | Generates transformer embeddings using `all-MiniLM-L6-v2` |
+| SearchEngine | Maintains normalized in-memory vector matrix for ultra-fast retrieval |
+| ChatEngine | Injects retrieved context into LLM prompt for grounded response generation |
 
 ---
 
-## 4. The 5-Step Data Pipeline
+## 3. Autonomous Data Synchronization Pipeline
 
-The system follows a linear professional data-processing pipeline:
+The system supports a fully automated refresh pipeline:
 
-1. **Extraction:** Asynchronously fetch clean data from portfolio sources  
-2. **Synthesis:** Convert raw text into structured technical documentation using generative AI  
-3. **Vectorization:** Transform document chunks into high-dimensional embedding vectors  
-4. **Optimization:** Use NumPy matrix mathematics to achieve microsecond-level retrieval latency  
-5. **Serving:** Keep model persistently loaded in RAM via FastAPI ASGI server for hot-start inference  
+1. **Crawl Latest Portfolio Data**  
+2. **Generate Structured Master PDF**  
+3. **Chunk Generated PDF into Semantic Sections**  
+4. **Embed Chunks into Dense Vectors**  
+5. **Refresh Search Index in RAM Without Restart**  
+
+This enables hot data synchronization without redeploying or restarting the inference server.
 
 ---
 
-## 5. Technical Optimizations & Clean Code
+## 4. FastAPI Persistent Serving Architecture
 
-Advanced engineering decisions were made to maximize scalability and performance:
+The FastAPI server keeps embeddings and retrieval matrices resident in RAM for sub-second inference.
 
-### Persistent Model Loading
-The model is loaded during server startup to eliminate repeated initialization overhead (~3.5s).
+### Startup Behavior
+On application boot:
 
-### Vectorized Search Operations
-Optimized NumPy matrix operations replace traditional Python loops:
+- Existing PDF is automatically loaded  
+- Chunking and embedding are performed  
+- Search matrix is precomputed in memory  
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/ask` | GET | Query the RAG assistant |
+| `/pipeline/update` | POST | Trigger full background sync pipeline |
+
+---
+
+## 5. Technical Optimizations
+
+### Persistent Hot-Loaded Retrieval Index
+Embedding matrix remains in RAM after startup for zero cold-start search latency.
+
+### Vectorized Similarity Search
+Uses normalized NumPy matrix operations instead of iterative loops:
 
 ```python
-# Vectorized Normalization & Similarity Scoring Logic
-self.embeddings_matrix = np.array(
-    [item['embedding'] for item in self.data]
-).astype('float32')
+matrix = np.array([item['embedding'] for item in self.data]).astype('float32')
+norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+self.embeddings_matrix = matrix / (norms + 1e-10)
 
-self.embeddings_matrix /= (
-    np.linalg.norm(self.embeddings_matrix, axis=1, keepdims=True) + 1e-10
-)
-
-# Instant dot product for similarity search
 similarities = np.dot(self.embeddings_matrix, query_vector)
 ```
 
-### Decoupled Architecture
-Ingestion, processing, and inference layers are fully independent and modular.
+### Background Pipeline Execution
+Portfolio refresh runs asynchronously in background tasks without blocking API availability.
+
+### Markdown-Aware Chunking
+Preserves semantic hierarchy using header-aware recursive chunk splitting.
 
 ---
 
-## 6. Execution Guide
+## 6. End-to-End Pipeline Flow
 
-### Pipeline Execution (Full Flow)
+```text
+Portfolio URLs
+   ↓
+ContentCrawler
+   ↓
+AIEngine (Gemini Synthesis)
+   ↓
+PDFGenerator
+   ↓
+DocumentChunker
+   ↓
+EmbedEngine
+   ↓
+SearchEngine (RAM Matrix)
+   ↓
+ChatEngine
+   ↓
+User Query Response
+```
 
-To run the complete pipeline from scraping to vector indexing:
+---
+
+## 7. Execution Guide
+
+### Run Manual Pipeline
 
 ```bash
 python runner.py full
 ```
 
-### Production Serving (Sub-Second Response)
-
-To start the high-speed inference server:
+### Start Production Server
 
 ```bash
 uvicorn app:app --reload
 ```
 
-Once started, the model remains persistent in RAM and serves instant responses via:
+---
+
+## 8. Example Query Endpoint
 
 ```http
-GET /ask?query=...
+GET /ask?query=Tell me about Asad's IoT experience
 ```
 
 ---
