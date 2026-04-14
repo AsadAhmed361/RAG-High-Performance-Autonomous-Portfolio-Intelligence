@@ -4,6 +4,12 @@ import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from rag_engine import PortfolioRetriever, DocumentChunker, EmbedEngine, SearchEngine, ChatEngine
+from fastapi.responses import HTMLResponse, FileResponse
+from pydantic import BaseModel
+
+class ChatRequest(BaseModel):
+    message: str
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -72,16 +78,57 @@ async def trigger_update(background_tasks: BackgroundTasks):
     background_tasks.add_task(full_sync_pipeline)
     return {"message": "Master update triggered. Crawling, chunking, and embedding are running in background."}
 
+# Initialize empty list for memory
+chat_history_buffer = [] 
+
 @app.get("/ask")
 async def ask_asad(query: str):
     try:
+        # 1. Pehle context nikalein
         results = search_engine.get_top_matches(query)
-        if not results:
-            return {"answer": "Engine is empty. Please run /pipeline/update first."}
         
-        answer = chat_engine.generate_response(query, results)
+        # 2. AI se jawab lein (History bhej kar)
+        answer = chat_engine.generate_response(
+            query=query, 
+            search_results=results, 
+            history=chat_history_buffer
+        )
+        
+        # 3. History Update Logic (Maintain exactly 5)
+        chat_history_buffer.append({"user": query, "assistant": answer})
+        
+        if len(chat_history_buffer) > 5:
+            chat_history_buffer.pop(0) # Sabse purana message (index 0) remove kar do
+            
         return {"query": query, "answer": answer}
     except Exception as e:
-        if "429" in str(e):
-            raise HTTPException(status_code=429, detail="API Quota Exceeded.")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error: {e}")
+        return {"error": str(e)}
+
+@app.get("/", response_class=HTMLResponse)
+async def get_ui():
+    return FileResponse("index.html")
+
+# 2. UI ki POST request handle karne ke liye naya endpoint
+@app.post("/chat")
+async def chat_endpoint(request: ChatRequest):
+    try:
+        query = request.message
+        
+        # 1. Search (rag_engine logic)
+        results = search_engine.get_top_matches(query)
+        
+        # 2. Generate Response with History
+        # Note: 'chat_history_buffer' aapne pehle hi banaya hua hai
+        answer = chat_engine.generate_response(query, results, chat_history_buffer)
+        
+        # 3. History update (sliding window of 5)
+        chat_history_buffer.append({"user": query, "assistant": answer})
+        if len(chat_history_buffer) > 5:
+            chat_history_buffer.pop(0)
+            
+        return {"reply": answer} # 'reply' key matches your JS 'data.reply'
+        
+    except Exception as e:
+        logger.error(f"Chat Error: {e}")
+        return {"reply": "Sorry, I am having trouble connecting to my brain right now."}

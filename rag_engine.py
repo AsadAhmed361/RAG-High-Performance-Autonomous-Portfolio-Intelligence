@@ -10,6 +10,12 @@ from dotenv import load_dotenv
 from langchain_huggingface import HuggingFaceEmbeddings
 import numpy as np
 import time
+import fitz
+import json
+from langchain_text_splitters import (
+    MarkdownHeaderTextSplitter,
+    RecursiveCharacterTextSplitter
+)
 
 
 
@@ -42,7 +48,7 @@ class AIEngine:
     def __init__(self, model_id="gemini-3-flash-preview"):
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
-            raise ValueError("❌ GEMINI_API_KEY not found in .env file!")
+            raise ValueError("GEMINI_API_KEY not found in .env file!")
         self.client = genai.Client(api_key=api_key)
         self.model_id = model_id
 
@@ -62,7 +68,7 @@ class AIEngine:
                 )
                 # Logging token usage
                 usage = response.usage_metadata
-                logger.info(f"📊 Tokens used: {usage.total_token_count}")
+                logger.info(f"Tokens used: {usage.total_token_count}")
                 return response.text
             except Exception as e:
                 logger.warning(f"AI Retry {attempt+1}: {e}")
@@ -81,7 +87,7 @@ class PDFGenerator:
         safe_text = content.encode('latin-1', 'ignore').decode('latin-1')
         pdf.multi_cell(0, 6, safe_text)
         pdf.output(self.output_name)
-        logger.info(f"✅ PDF Saved: {self.output_name}")
+        logger.info(f"PDF Saved: {self.output_name}")
 
 # --- INTEGRATED RETRIEVER CLASS WITH URLS ---
 class PortfolioRetriever:
@@ -105,7 +111,7 @@ class PortfolioRetriever:
         self.pdf_gen = PDFGenerator(output_pdf)
 
     async def run_update(self):
-        print("🚀 Portfolio Update Service Triggered...")
+        print("Portfolio Update Service Triggered...")
         
         # Step 1: Fetch
         data = self.crawler.fetch_all_clean_data()
@@ -116,18 +122,13 @@ class PortfolioRetriever:
         # Step 3: Generate
         if structured_text != "AI Error":
             self.pdf_gen.generate(structured_text)
-            print(f"✅ Success: {self.output_pdf} created with latest data.")
+            print(f"Success: {self.output_pdf} created with latest data.")
             return True
         else:
-            print("❌ Failure: Could not process data.")
+            print("Failure: Could not process data.")
             return False
             
-import fitz
-import json
-from langchain_text_splitters import (
-    MarkdownHeaderTextSplitter,
-    RecursiveCharacterTextSplitter
-)
+
 
 
 class DocumentChunker:
@@ -160,79 +161,54 @@ class EmbedEngine:
         self.model = HuggingFaceEmbeddings(model_name=model_name)
 
 class EmbedEngine:
-    def __init__(self, model_name="sentence-transformers/all-MiniLM-L6-v2"):
-        self.model = HuggingFaceEmbeddings(model_name=model_name)
+    # Yahan humne default path "./my_local_model" kar diya hai
+    def __init__(self, model_path="./my_local_model"):
+        logger.info(f"Initializing EmbedEngine using LOCAL model at: {model_path}")
+        self.model = HuggingFaceEmbeddings(
+            model_name=model_path,
+            model_kwargs={'device': 'cpu'} # Agar GPU hai to 'cuda' likh sakte hain
+        )
 
     def generate_vectors(self, chunks):
-        """Variable (list) input, returns List of dicts with embeddings"""
+        if not chunks: return []
         texts = [c["content"] for c in chunks]
         vectors = self.model.embed_documents(texts)
-        
         for i, chunk in enumerate(chunks):
             chunk["embedding"] = vectors[i]
-        return chunks # Return embedded data in RAM
-        
+        return chunks
 
-
-# class SearchEngine:
-    # def __init__(self, data_path="embedded_chunks.json"):
-        # """
-        # Constructor: Model aur data load karta hai.
-        # """
-        # print("Initializing SearchEngine...")
-        # self.model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-        
-        # with open(data_path, "r", encoding="utf-8") as f:
-            # self.data = json.load(f)
-        # print(f"SearchEngine ready with {len(self.data)} chunks.")
-
-    # def _get_similarity(self, v1, v2):
-        # return np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
-
-    # def get_top_matches(self, query, top_k=3, output_file="search_results.json"):
-        # """
-        # Search karta hai aur results ko JSON file mein save karta hai.
-        # """
-        # start_time = time.time()
-        # query_vector = self.model.embed_query(query)
-        
-        # all_results = []
-        # for item in self.data:
-            # score = self._get_similarity(query_vector, item['embedding'])
-            # all_results.append({
-                # "score": float(score),
-                # "content": item['content'],
-                # "metadata": item['metadata']
-            # })
-        
-        # # Sorting
-        # top_results = sorted(all_results, key=lambda x: x['score'], reverse=True)[:top_k]
-        
-        # # Response object for JSON
-        # final_output = {
-            # "query": query,
-            # "search_metadata": {
-                # "top_k": top_k,
-                # "execution_time_sec": round(time.time() - start_time, 4),
-                # "total_pool_size": len(self.data)
-            # },
-            # "results": top_results
-        # }
-
-        # # Saving to JSON
-        # with open(output_file, "w", encoding="utf-8") as f:
-            # json.dump(final_output, f, indent=2, ensure_ascii=False)
-        
-        # print(f"Search results saved to {output_file}")
-        # return top_results
-        
 class SearchEngine:
-    def __init__(self, initial_data=None):
-        self.model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    def __init__(self, model_path="./my_local_model", initial_data=None):
+        logger.info(f"Initializing SearchEngine using LOCAL model at: {model_path}")
+        self.model = HuggingFaceEmbeddings(model_name=model_path)
         self.data = []
         self.embeddings_matrix = None
         if initial_data:
             self.update_index(initial_data)
+
+    def update_index(self, embedded_data):
+        self.data = embedded_data
+        if not embedded_data: return
+        matrix = np.array([item['embedding'] for item in self.data]).astype('float32')
+        norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+        self.embeddings_matrix = matrix / (norms + 1e-10)
+        logger.info(f"Search index refreshed with {len(self.data)} chunks.")
+
+    def get_top_matches(self, query, top_k=3):
+        if self.embeddings_matrix is None: return []
+        
+        # Local model query embedding
+        query_vector = np.array(self.model.embed_query(query)).astype('float32')
+        query_vector /= (np.linalg.norm(query_vector) + 1e-10)
+        
+        similarities = np.dot(self.embeddings_matrix, query_vector)
+        top_indices = np.argsort(similarities)[::-1][:top_k]
+        
+        return [{
+            "score": float(similarities[i]),
+            "content": self.data[i]['content'],
+            "metadata": self.data[i]['metadata']
+        } for i in top_indices]
 
     def update_index(self, embedded_data):
         """Update matrix in RAM without reading files"""
@@ -262,13 +238,34 @@ class ChatEngine:
         self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
         self.model_id = model_id
 
-    def generate_response(self, query, search_results):
-        context = "\n".join([f"SOURCE {i+1}:\n{m['content']}" for i, m in enumerate(search_results)])
-        prompt = f"Act as Asad's AI. Answer based ONLY on context:\n\nCONTEXT:\n{context}\n\nUSER: {query}"
+    def generate_response(self, query, search_results, history):
+        # Ensure 'history' is a list
+        if history is None:
+            history = []
+            
+        context_text = "\n".join([f"- {m['content']}" for m in search_results])
         
+        formatted_history = ""
+        for turn in history:
+            formatted_history += f"User: {turn['user']}\nAI: {turn['assistant']}\n"
+
+        prompt = f"""
+        Act as Asad's Personal Portfolio AI. Use the provided history and context to answer.
+
+        ### RECENT CONVERSATION (Last 5 Turns):
+        {formatted_history if formatted_history else "No previous history."}
+
+        ### RELEVANT PORTFOLIO CONTEXT:
+        {context_text}
+
+        ### CURRENT QUESTION:
+        User: {query}
+        AI:"""
+
         response = self.client.models.generate_content(
-            model=self.model_id, contents=prompt,
-            config=types.GenerateContentConfig(temperature=0.1, max_output_tokens=800)
+            model=self.model_id, 
+            contents=prompt,
+            config=types.GenerateContentConfig(temperature=0.3, max_output_tokens=800)
         )
         return response.text
 

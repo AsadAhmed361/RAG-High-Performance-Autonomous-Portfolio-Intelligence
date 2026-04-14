@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+python-multipart
+pydantic
+google-genai
+langchain
+langchain-huggingface
+sentence-transformers
+numpy
+langchain-text-splitters
+pymupdf
+beautifulsoup4
+requests
+fpdf
+python-dotenv
