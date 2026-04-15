@@ -4,6 +4,10 @@ RAG Portfolio Intelligence Engine is an end-to-end Retrieval-Augmented Generatio
 
 ---
 
+![Asad's AI Assistant](Asads%20AI%20Assistant.gif)
+
+---
+
 ## 1. Project Directory Structure
 
 ```text
